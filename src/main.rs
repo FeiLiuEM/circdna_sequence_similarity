@@ -77,14 +77,17 @@ fn main() {
         process::exit(1);
     }
 
+    // 预处理a_string为a_string + a_string[0:20]
+    let extended_a_string = format!("{}{}", a_string, &a_string[0..20.min(a_string.len())]);
+
     let mut similarity_list = Vec::new();
 
-    for i in (0..a_string.len()).step_by(10) {
-        let end = (i + 30).min(a_string.len());
+    for i in (0..extended_a_string.len()).step_by(10) {
+        let end = (i + 30).min(extended_a_string.len());
         if end - i < 30 {
             break;
         }
-        let sub_string = &a_string[i..end];
+        let sub_string = &extended_a_string[i..end];
         let similarity = smith_waterman(sub_string, b_string);
         similarity_list.push(similarity);
     }
