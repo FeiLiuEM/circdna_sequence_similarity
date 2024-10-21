@@ -1,23 +1,18 @@
-#!/usr/bin/env python3
-
 import sys
-
 
 def help():
     print('Usage: {} <input_file> [output_file]'.format(sys.argv[0]))
 
-
 def convert_to_csv(in_file, out_file):
-    out_file.write(u'"SeqID","sequence","quality"\n')
+    out_file.write(u'"SeqID","sequence"\n')
     for line in in_file:
-        if not line.startswith('@'):
+        if not line.startswith('>'):
             continue
         seq_id = line.strip()
-        sequence = next(in_file).strip()
-        next(in_file)
-        quality = next(in_file).strip()
-        out_file.write(u'"{}","{}","{}"\n'.format(seq_id, sequence, quality))
-
+        sequence = next(in_file).strip().replace('U', 'T')
+        #next(in_file)
+        #next(in_file)  # Skip the quality line
+        out_file.write(u'"{}","{}"\n'.format(seq_id, sequence))
 
 def main():
     if len(sys.argv) < 2:
@@ -35,7 +30,6 @@ def main():
         with open(in_file) as infd:
             with open(out_file, 'w') as outfd:
                 convert_to_csv(infd, outfd)
-
 
 if __name__ == '__main__':
     main()
