@@ -1,7 +1,7 @@
 use csv::Reader;
 use csv::Writer;
 use std::fs::File;
-use std::process;
+//use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::env;
@@ -92,10 +92,10 @@ fn main() {
     for result in b_rdr.records() {
         let record = result.expect("Unable to read record");
         let b_sequence = record.get(0).expect("Unable to get b_sequence").to_uppercase();
-        if b_sequence.len() != 20 {
-            eprintln!("b_sequence must be exactly 20 characters long.");
-            process::exit(1);
-        }
+        //if b_sequence.len() != 20 {
+        //    eprintln!("b_sequence must be exactly 20 characters long.");
+        //    process::exit(1);
+        //}
         b_sequences.push(b_sequence);
     }
 
