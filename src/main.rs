@@ -1,5 +1,5 @@
+use csv::Reader;
 use csv::Writer;
-use std::env;
 use std::fs::File;
 use std::process;
 
@@ -9,7 +9,7 @@ fn smith_waterman(a: &str, b: &str) -> i32 {
     let n = b.len();
     let mut matrix = vec![vec![0; n + 1]; m + 1];
     let match_score = 2;
-    let mismatch_score = -2;
+    let mismatch_score = -1;
     let gap_opening_penalty = -1;
     let gap_extension_penalty = -1;
 
@@ -63,41 +63,61 @@ fn smith_waterman(a: &str, b: &str) -> i32 {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 3 {
-        eprintln!("Usage: {} <a_string> <b_string>", args[0]);
-        process::exit(1);
+    let a_file = File::open("a_sequence.csv").expect("Unable to open a_sequence.csv");
+    let mut a_rdr = Reader::from_reader(a_file);
+
+    let b_file = File::open("b_sequence.csv").expect("Unable to open b_sequence.csv");
+    let mut b_rdr = Reader::from_reader(b_file);
+
+    let mut a_sequences = Vec::new();
+    for result in a_rdr.records() {
+        let record = result.expect("Unable to read record");
+        let a_sequence = record.get(0).expect("Unable to get a_sequence").to_uppercase();
+        a_sequences.push(a_sequence);
     }
 
-    let a_string = &args[1];
-    let b_string = &args[2];
-
-    if b_string.len() != 20 {
-        eprintln!("b_string must be exactly 20 characters long.");
-        process::exit(1);
-    }
-
-    // 预处理a_string为a_string + a_string[0:20]
-    let extended_a_string = format!("{}{}", a_string, &a_string[0..20.min(a_string.len())]);
-
-    let mut similarity_list = Vec::new();
-
-    for i in (0..extended_a_string.len()).step_by(10) {
-        let end = (i + 30).min(extended_a_string.len());
-        if end - i < 30 {
-            break;
+    let mut b_sequences = Vec::new();
+    for result in b_rdr.records() {
+        let record = result.expect("Unable to read record");
+        let b_sequence = record.get(0).expect("Unable to get b_sequence").to_uppercase();
+        if b_sequence.len() != 20 {
+            eprintln!("b_sequence must be exactly 20 characters long.");
+            process::exit(1);
         }
-        let sub_string = &extended_a_string[i..end];
-        let similarity = smith_waterman(sub_string, b_string);
-        similarity_list.push(similarity);
+        b_sequences.push(b_sequence);
     }
 
-    let similarity_string = similarity_list.iter().map(|&x| x.to_string()).collect::<Vec<_>>().join(",");
+    let mut results = Vec::new();
+    results.push(vec!["a_sequence".to_string(), "b_sequence".to_string(), "similarity_string".to_string()]);
 
-    let file = File::create("result.csv").expect("Unable to create file");
-    let mut wtr = Writer::from_writer(file);
-    wtr.write_record(&["a_string", "b_string", "similarity_string"]).expect("Unable to write record");
-    wtr.write_record(&[a_string, b_string, &similarity_string]).expect("Unable to write record");
+    for a_sequence in a_sequences {
+        for b_sequence in &b_sequences {
+            // 预处理a_sequence为a_sequence + a_sequence[0:20]
+            let extended_a_sequence = format!("{}{}", a_sequence, &a_sequence[0..20.min(a_sequence.len())]);
+
+            let mut similarity_list = Vec::new();
+
+            for i in (0..extended_a_sequence.len()).step_by(10) {
+                let end = (i + 30).min(extended_a_sequence.len());
+                if end - i < 30 {
+                    break;
+                }
+                let sub_sequence = &extended_a_sequence[i..end];
+                let similarity = smith_waterman(sub_sequence, b_sequence);
+                similarity_list.push(similarity);
+            }
+
+            let similarity_string = similarity_list.iter().map(|&x| x.to_string()).collect::<Vec<_>>().join(",");
+
+            results.push(vec![a_sequence.clone(), b_sequence.clone(), similarity_string]);
+        }
+    }
+
+    let mut wtr = Writer::from_path("result.csv").expect("Unable to create file");
+    for result in results {
+        wtr.write_record(result).expect("Unable to write record");
+    }
+
     wtr.flush().expect("Unable to flush writer");
 }
 
