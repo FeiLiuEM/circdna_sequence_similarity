@@ -2,6 +2,9 @@ use csv::Reader;
 use csv::Writer;
 use std::fs::File;
 use std::process;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::env;
 
 // Smith-Waterman算法的实现
 fn smith_waterman(a: &str, b: &str) -> i32 {
@@ -63,6 +66,15 @@ fn smith_waterman(a: &str, b: &str) -> i32 {
 }
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    let mut num_threads = 8;
+
+    if let Some(index) = args.iter().position(|arg| arg == "-j") {
+        if index + 1 < args.len() {
+            num_threads = args[index + 1].parse::<usize>().expect("Invalid number of threads");
+        }
+    }
+
     let a_file = File::open("a_sequence.csv").expect("Unable to open a_sequence.csv");
     let mut a_rdr = Reader::from_reader(a_file);
 
@@ -87,34 +99,53 @@ fn main() {
         b_sequences.push(b_sequence);
     }
 
-    let mut results = Vec::new();
-    results.push(vec!["a_sequence".to_string(), "b_sequence".to_string(), "similarity_string".to_string()]);
+    let results = Arc::new(Mutex::new(Vec::new()));
+    let mut handles = vec![];
 
-    for a_sequence in a_sequences {
-        for b_sequence in &b_sequences {
-            // 预处理a_sequence为a_sequence + a_sequence[0:20]
-            let extended_a_sequence = format!("{}{}", a_sequence, &a_sequence[0..20.min(a_sequence.len())]);
+    // 分配任务给多个线程
+    let chunk_size = (a_sequences.len() + num_threads - 1) / num_threads;
+    for chunk in a_sequences.chunks(chunk_size) {
+        let chunk = chunk.to_vec();
+        let results = Arc::clone(&results);
+        let b_sequences = b_sequences.clone();
 
-            let mut similarity_list = Vec::new();
+        let handle = thread::spawn(move || {
+            for a_sequence in chunk {
+                for b_sequence in &b_sequences {
+                    // 预处理a_sequence为a_sequence + a_sequence[0:20]
+                    let extended_a_sequence = format!("{}{}", a_sequence, &a_sequence[0..20.min(a_sequence.len())]);
 
-            for i in (0..extended_a_sequence.len()).step_by(10) {
-                let end = (i + 30).min(extended_a_sequence.len());
-                if end - i < 30 {
-                    break;
+                    let mut similarity_list = Vec::new();
+
+                    for i in (0..extended_a_sequence.len()).step_by(10) {
+                        let end = (i + 30).min(extended_a_sequence.len());
+                        if end - i < 30 {
+                            break;
+                        }
+                        let sub_sequence = &extended_a_sequence[i..end];
+                        let similarity = smith_waterman(sub_sequence, b_sequence);
+                        similarity_list.push(similarity);
+                    }
+
+                    let similarity_string = similarity_list.iter().map(|&x| x.to_string()).collect::<Vec<_>>().join(",");
+
+                    let mut results = results.lock().unwrap();
+                    results.push(vec![a_sequence.clone(), b_sequence.clone(), similarity_string]);
                 }
-                let sub_sequence = &extended_a_sequence[i..end];
-                let similarity = smith_waterman(sub_sequence, b_sequence);
-                similarity_list.push(similarity);
             }
+        });
 
-            let similarity_string = similarity_list.iter().map(|&x| x.to_string()).collect::<Vec<_>>().join(",");
-
-            results.push(vec![a_sequence.clone(), b_sequence.clone(), similarity_string]);
-        }
+        handles.push(handle);
     }
 
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    let results = results.lock().unwrap();
     let mut wtr = Writer::from_path("result.csv").expect("Unable to create file");
-    for result in results {
+    wtr.write_record(&["a_sequence", "b_sequence", "similarity_string"]).expect("Unable to write record");
+    for result in results.iter() {
         wtr.write_record(result).expect("Unable to write record");
     }
 
