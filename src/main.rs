@@ -5,6 +5,8 @@ use std::fs::File;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::env;
+//use std::time::Duration;
+use indicatif::{ProgressBar, ProgressStyle};
 
 // Smith-Waterman算法的实现
 fn smith_waterman(a: &str, b: &str) -> i32 {
@@ -138,17 +140,38 @@ fn main() {
         handles.push(handle);
     }
 
-    for handle in handles {
-        handle.join().unwrap();
-    }
+    let total_tasks = a_sequences.len() * b_sequences.len();
+    let pb = ProgressBar::new(total_tasks as u64);
+    pb.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+        .progress_chars("#>-"));
 
-    let results = results.lock().unwrap();
     let mut wtr = Writer::from_path("result.csv").expect("Unable to create file");
     wtr.write_record(&["a_sequence", "b_sequence", "similarity_string"]).expect("Unable to write record");
-    for result in results.iter() {
-        wtr.write_record(result).expect("Unable to write record");
+
+    let mut completed_threads = 0;
+    for handle in handles {
+        handle.join().unwrap();
+        completed_threads += 1;
+
+        if completed_threads % 10 == 0 {
+            let mut results = results.lock().unwrap();
+            for result in results.iter() {
+                wtr.write_record(result).expect("Unable to write record");
+                pb.inc(1);
+            }
+            wtr.flush().expect("Unable to flush writer");
+            results.clear();
+        }
     }
 
+    // 写入剩余的结果
+    let results = results.lock().unwrap();
+    for result in results.iter() {
+        wtr.write_record(result).expect("Unable to write record");
+        pb.inc(1);
+    }
     wtr.flush().expect("Unable to flush writer");
-}
 
+    pb.finish_with_message("All tasks completed");
+}
