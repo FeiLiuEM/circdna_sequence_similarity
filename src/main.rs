@@ -1,11 +1,9 @@
 use csv::Reader;
 use csv::Writer;
 use std::fs::File;
-//use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::env;
-//use std::time::Duration;
 use indicatif::{ProgressBar, ProgressStyle};
 
 // Smith-Waterman算法的实现
@@ -84,20 +82,22 @@ fn main() {
     let mut b_rdr = Reader::from_reader(b_file);
 
     let mut a_sequences = Vec::new();
+    let a_headers = a_rdr.headers().expect("Unable to read headers").clone();
+    let a_sequence_index = a_headers.iter().position(|h| h == "a_sequence").expect("Unable to find a_sequence column");
+
     for result in a_rdr.records() {
         let record = result.expect("Unable to read record");
-        let a_sequence = record.get(0).expect("Unable to get a_sequence").to_uppercase();
+        let a_sequence = record.get(a_sequence_index).expect("Unable to get a_sequence").to_uppercase();
         a_sequences.push(a_sequence);
     }
 
     let mut b_sequences = Vec::new();
+    let b_headers = b_rdr.headers().expect("Unable to read headers").clone();
+    let b_sequence_index = b_headers.iter().position(|h| h == "b_sequence").expect("Unable to find b_sequence column");
+
     for result in b_rdr.records() {
         let record = result.expect("Unable to read record");
-        let b_sequence = record.get(0).expect("Unable to get b_sequence").to_uppercase();
-        //if b_sequence.len() != 20 {
-        //    eprintln!("b_sequence must be exactly 20 characters long.");
-        //    process::exit(1);
-        //}
+        let b_sequence = record.get(b_sequence_index).expect("Unable to get b_sequence").to_uppercase();
         b_sequences.push(b_sequence);
     }
 
@@ -154,7 +154,7 @@ fn main() {
         handle.join().unwrap();
         completed_threads += 1;
 
-        if completed_threads % 10 == 0 {
+        if completed_threads % 200 == 0 {
             let mut results = results.lock().unwrap();
             for result in results.iter() {
                 wtr.write_record(result).expect("Unable to write record");
