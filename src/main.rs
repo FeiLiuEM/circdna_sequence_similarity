@@ -84,21 +84,25 @@ fn main() {
     let mut a_sequences = Vec::new();
     let a_headers = a_rdr.headers().expect("Unable to read headers").clone();
     let a_sequence_index = a_headers.iter().position(|h| h == "a_sequence").expect("Unable to find a_sequence column");
+    let a_sequence_name_index = a_headers.iter().position(|h| h == "a_sequence_name").expect("Unable to find a_sequence_name column");
 
     for result in a_rdr.records() {
         let record = result.expect("Unable to read record");
         let a_sequence = record.get(a_sequence_index).expect("Unable to get a_sequence").to_uppercase();
-        a_sequences.push(a_sequence);
+        let a_sequence_name = record.get(a_sequence_name_index).expect("Unable to get a_sequence_name").to_string();
+        a_sequences.push((a_sequence, a_sequence_name));
     }
 
     let mut b_sequences = Vec::new();
     let b_headers = b_rdr.headers().expect("Unable to read headers").clone();
     let b_sequence_index = b_headers.iter().position(|h| h == "b_sequence").expect("Unable to find b_sequence column");
+    let b_sequence_name_index = b_headers.iter().position(|h| h == "b_sequence_name").expect("Unable to find b_sequence_name column");
 
     for result in b_rdr.records() {
         let record = result.expect("Unable to read record");
         let b_sequence = record.get(b_sequence_index).expect("Unable to get b_sequence").to_uppercase();
-        b_sequences.push(b_sequence);
+        let b_sequence_name = record.get(b_sequence_name_index).expect("Unable to get b_sequence_name").to_string();
+        b_sequences.push((b_sequence, b_sequence_name));
     }
 
     let results = Arc::new(Mutex::new(Vec::new()));
@@ -112,8 +116,8 @@ fn main() {
         let b_sequences = b_sequences.clone();
 
         let handle = thread::spawn(move || {
-            for a_sequence in chunk {
-                for b_sequence in &b_sequences {
+            for (a_sequence, a_sequence_name) in chunk {
+                for (b_sequence, b_sequence_name) in &b_sequences {
                     // 预处理a_sequence为a_sequence + a_sequence[0:20]
                     let extended_a_sequence = format!("{}{}", a_sequence, &a_sequence[0..20.min(a_sequence.len())]);
 
@@ -132,7 +136,7 @@ fn main() {
                     let similarity_string = similarity_list.iter().map(|&x| x.to_string()).collect::<Vec<_>>().join(",");
 
                     let mut results = results.lock().unwrap();
-                    results.push(vec![a_sequence.clone(), b_sequence.clone(), similarity_string]);
+                    results.push(vec![a_sequence_name.clone(), b_sequence_name.clone(), similarity_string]);
                 }
             }
         });
@@ -147,7 +151,7 @@ fn main() {
         .progress_chars("#>-"));
 
     let mut wtr = Writer::from_path("result.csv").expect("Unable to create file");
-    wtr.write_record(&["a_sequence", "b_sequence", "similarity_string"]).expect("Unable to write record");
+    wtr.write_record(&["a_sequence_name", "b_sequence_name", "similarity_string"]).expect("Unable to write record");
 
     let mut completed_threads = 0;
     for handle in handles {
